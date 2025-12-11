@@ -1,4 +1,4 @@
-# SRH ImageViewer Capstone Project
+# Imaging Technologies Capstone Project: SRH ImageViewer
 
 Welcome to the SRH ImageViewer project! The goal of this project is to collaboratively build an image processing application. Each student will contribute by creating a personal "module" that adds new image processing capabilities to the main application.
 
@@ -7,7 +7,7 @@ This guide will walk you through setting up the project, creating your own modul
 ## Project Timeline
 
 -   **Project Start:** Now
--   **Contribution Deadline:** All pull requests must be created and submitted by **Wednesday, 17th at midnight**.
+-   **Contribution Deadline:** All pull requests must be created and submitted by **Wednesday, 17th at midnight (Group 1)** and **Thursday, 18th at midnight (Group 2)**.
 -   **Project Showcase:** Thursday 18th (Group 1), Friday 19th (Group 2)
 
 ## 1. Project Setup
@@ -20,14 +20,14 @@ Open your terminal or Git client and clone the project repository to your comput
 
 ```bash
 git clone https://gitlab.com/image-tech-group/srh-image-viewer.git
-cd srhimageviewer
+cd srh-image-viewer
 ```
 
 ### 1.2. Create a Virtual Environment
 
-(You can choose to install the project's dependencies in your global python environment. If that is the case, please skip to 1.3)
+You can choose to install the project's dependencies in your global python environment. If that is the case, please skip to 1.3.
 
-It might be more adequate to use a virtual environment to manage project dependencies. This keeps your project's libraries separate from your system's Python installation.
+However, it might be more adequate to use a virtual environment to manage project dependencies. This keeps your project's libraries separate from your system's Python installation.
 
 ```bash
 # Create a virtual environment named 'venv'
@@ -59,12 +59,15 @@ python -m pip install -r requirements.txt
 You should now be able to run the main application.
 
 ```bash
+cd src
 python main_app.py
 ```
 
+If the app does not run, check the error that is displayed. It is possible that you need to install `PyQt6`. Un-comment on the first line of your `requirements.txt` file and re-run the dependencies installation comment. Re-try running the app.
+
 ## 2. Creating Your Module
 
-Your contribution will be a new "module". A module is a self-contained set of files that adds your custom functionality (ies) and user interface (UI) to the main application.
+Your contribution will be a new "module". A module is a self-contained set of files that adds your custom functionality (a set of image processing features or transformations) and user interface (UI) to the main application. You can add as many features as you like.
 
 ### 2.1. Create Your Module Directory and File
 
@@ -173,7 +176,7 @@ The logic is as follows:
         processed_data = image_data.copy()
         operation = params.get('operation')
 
-        # ... (keep the other elif blocks for other operations)
+        # ... (keep the other elif blocks for other operations if necessary)
 
         elif operation == "Contrast Stretching":
             # Ensure we are working with a floating point image for calculations
@@ -210,17 +213,13 @@ Now, run the application. You should see your module in the module selection dro
 
 ## 4. Submitting Your Contribution
 
-Once you have tested and are happy with all functionalities implementations in your module, it's time to submit it for review (latest 17th for Group 1 and 18th for Group 2).
+Once you have tested and are happy with all functionalities implementated in your module, it is time to submit it for review (latest 17th for Group 1 and 18th for Group 2).
 
 ### 4.1. Use Git for Version Control
 
 1.  **Create a new branch** for your feature. This keeps your work separate from the main codebase.
 
     ```bash
-    # Make sure you are on the main branch and have the latest changes
-    git checkout main
-    git pull
-
     # Create and switch to a new branch
     git checkout -b feature/john-doe
     ```
@@ -229,7 +228,7 @@ Once you have tested and are happy with all functionalities implementations in y
 
     ```bash
     # Add your new module file
-    git add modules/john_doe/john_doe_module.py
+    git add src/modules/john_doe/john_doe_module.py
 
     # Commit the changes
     git commit -m "feat: Add John Doe module"
@@ -249,4 +248,4 @@ Once you have tested and are happy with all functionalities implementations in y
 4.  In the description, briefly explain what you added and how to test it.
 5.  Click "Create pull request".
 
-Your pull request will be reviewed and, once approved, merged into the main project. Congratulations, you've successfully contributed!
+Your pull request will be reviewed and, once approved, merged into the main project. Congratulations, you've successfully contributed and submitted your work to be graded ! See you the next for presentations !
