@@ -1,6 +1,6 @@
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QPushButton, 
-                             QComboBox, QStackedWidget, QDoubleSpinBox)
-from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
+                             QComboBox, QStackedWidget, QDoubleSpinBox, QCheckBox)
+from PySide6.QtCore import Signal, Qt
 import numpy as np
 import imageio
 
@@ -9,6 +9,9 @@ from modules.i_image_module import IImageModule
 # --- Generic Parameter UI Components ---
 
 class BaseParamsWidget(QWidget):
+    # This signal tells the main UI that a slider/box has moved
+    parametersChanged = Signal()
+    
     def get_params(self) -> dict:
         raise NotImplementedError
 
@@ -20,22 +23,36 @@ class NoParamsWidget(BaseParamsWidget):
         label.setStyleSheet("font-style: italic; color: gray;")
         layout.addWidget(label)
         layout.addStretch()
+    
     def get_params(self) -> dict: return {}
 
 class DualParameterWidget(BaseParamsWidget):
     def __init__(self, label1, val1, min1, max1, label2, val2, min2, max2, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
+        
+        # Parameter 1
         layout.addWidget(QLabel(label1))
         self.sb1 = QDoubleSpinBox()
-        self.sb1.setRange(min1, max1); self.sb1.setValue(val1); self.sb1.setSingleStep(0.1)
+        self.sb1.setRange(min1, max1)
+        self.sb1.setValue(val1)
+        self.sb1.setSingleStep(0.1)
+        self.sb1.valueChanged.connect(lambda: self.parametersChanged.emit())
         layout.addWidget(self.sb1)
+        
+        # Parameter 2
         layout.addWidget(QLabel(label2))
         self.sb2 = QDoubleSpinBox()
-        self.sb2.setRange(min2, max2); self.sb2.setValue(val2); self.sb2.setSingleStep(0.1)
+        self.sb2.setRange(min2, max2)
+        self.sb2.setValue(val2)
+        self.sb2.setSingleStep(0.1)
+        self.sb2.valueChanged.connect(lambda: self.parametersChanged.emit())
         layout.addWidget(self.sb2)
+        
         layout.addStretch()
-    def get_params(self) -> dict: return {'p1': self.sb1.value(), 'p2': self.sb2.value()}
+
+    def get_params(self) -> dict: 
+        return {'p1': self.sb1.value(), 'p2': self.sb2.value()}
 
 # --- Main Module Implementation ---
 
@@ -66,19 +83,25 @@ class SiddhImageModule(IImageModule):
 
     def _handle_processing_request(self, params: dict):
         if self._controls_widget and self._controls_widget.module_manager:
+            # Passes the request to the main framework to update the display
             self._controls_widget.module_manager.apply_processing_to_current_image(params)
 
     # --- NumPy Image Processing Algorithms ---
 
+    def _ensure_rgb(self, img):
+        """Converts grayscale (H,W) to (H,W,3) if necessary."""
+        if img.ndim == 2:
+            return np.stack([img, img, img], axis=-1)
+        return img
+
     def _apply_sharpen(self, img, strength):
-        """4-neighbor Laplacian mask."""
         laplacian = np.zeros_like(img)
+        # Using a simple 4-neighbor cross kernel
         laplacian[1:-1, 1:-1] = (4 * img[1:-1, 1:-1] - img[:-2, 1:-1] - 
                                  img[2:, 1:-1] - img[1:-1, :-2] - img[1:-1, 2:])
         return img + (laplacian * strength)
 
     def _apply_linear_stretch(self, img, new_min=0, new_max=255):
-        """Linear contrast stretching."""
         c_min, c_max = np.min(img), np.max(img)
         if c_max == c_min: return img
         return (img - c_min) * ((new_max - new_min) / (c_max - c_min)) + new_min
@@ -93,9 +116,9 @@ class SiddhImageModule(IImageModule):
         elif op == "Brightness & Contrast":
             img = params.get('p2', 1.0) * (img - 128) + 128 + params.get('p1', 0)
         elif op == "Gamma Correction":
-            img = 255 * (img / 255) ** params.get('p1', 1.0)
+            img = 255 * (np.clip(img / 255, 0, 1) ** params.get('p1', 1.0))
         elif op == "Log Transformation":
-            img = (255 / np.log(1 + np.max(img))) * np.log(1 + img)
+            img = (255 / np.log(1 + np.max(img) + 1e-5)) * np.log(1 + img)
 
         # 5-8: Spatial Filters
         elif op == "Edge Sharpening":
@@ -115,32 +138,31 @@ class SiddhImageModule(IImageModule):
 
         # 9-13: Color & Channel Operations
         elif op == "Sepia Filter":
-            if img.ndim == 3:
-                r, g, b = img[:,:,0], img[:,:,1], img[:,:,2]
-                img[:,:,0] = (r * .393) + (g *.769) + (b * .189)
-                img[:,:,1] = (r * .349) + (g *.686) + (b * .168)
-                img[:,:,2] = (r * .272) + (g *.534) + (b * .131)
+            img = self._ensure_rgb(img)
+            r, g, b = img[:,:,0], img[:,:,1], img[:,:,2]
+            img[:,:,0] = (r * .393) + (g *.769) + (b * .189)
+            img[:,:,1] = (r * .349) + (g *.686) + (b * .168)
+            img[:,:,2] = (r * .272) + (g *.534) + (b * .131)
         elif op == "Intensity Threshold":
             img = np.where(img > params.get('p1', 128), 255, 0)
         elif op == "Negative/Inversion":
             img = 255 - img
         elif op == "Channel Balance":
-            if img.ndim == 3:
-                img[:,:,0] *= params.get('p1', 1.0) # Red
-                img[:,:,2] *= params.get('p2', 1.0) # Blue
+            img = self._ensure_rgb(img)
+            img[:,:,0] *= params.get('p1', 1.0) # Red
+            img[:,:,2] *= params.get('p2', 1.0) # Blue
         elif op == "Grayscale conversion":
-            if img.ndim == 3:
-                gray = 0.2989 * img[:,:,0] + 0.5870 * img[:,:,1] + 0.1140 * img[:,:,2]
-                img = np.stack([gray, gray, gray], axis=-1)
+            img = self._ensure_rgb(img)
+            gray = 0.2989 * img[:,:,0] + 0.5870 * img[:,:,1] + 0.1140 * img[:,:,2]
+            img = np.stack([gray, gray, gray], axis=-1)
 
-        # 14-15: Complex Pipelines (Chained NumPy Operations)
+        # 14-15: Complex Pipelines
         elif op == "Cinematic Pipeline":
-            img = 255 * (img / 255) ** 1.1 
+            img = 255 * (np.clip(img / 255, 0, 1) ** 1.1) 
             img = self._apply_linear_stretch(img, 0, 255)
             img = self._apply_sharpen(img, 0.7)
-
         elif op == "HDR Pipeline":
-            img = (255 / np.log(1 + np.max(img))) * np.log(1 + img)
+            img = (255 / np.log(1 + np.max(img) + 1e-5)) * np.log(1 + img)
             img = self._apply_linear_stretch(img, 0, 255)
             img = self._apply_sharpen(img, 0.4)
 
@@ -150,18 +172,27 @@ class SiddhImageModule(IImageModule):
 
 class SiddhControlsWidget(QWidget):
     process_requested = Signal(dict)
+    
     def __init__(self, module_manager, parent=None):
         super().__init__(parent)
         self.module_manager = module_manager
         self.widgets = {}
+        
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("<h2>Enhancement Tools</h2>"))
+        layout.addWidget(QLabel("<h2>Siddh Suite</h2>"))
+        
+        # Live Preview Toggle
+        self.live_preview = QCheckBox("Live Preview")
+        self.live_preview.setChecked(True)
+        layout.addWidget(self.live_preview)
         
         self.selector = QComboBox()
         layout.addWidget(self.selector)
+        
         self.stack = QStackedWidget()
         layout.addWidget(self.stack)
 
+        # Configuration mapping
         config = {
             "Cinematic Pipeline": NoParamsWidget,
             "HDR Pipeline": NoParamsWidget,
@@ -182,15 +213,30 @@ class SiddhControlsWidget(QWidget):
 
         for name, factory in config.items():
             w = factory()
+            # Connect the signal from the parameter widget to our local handler
+            if hasattr(w, 'parametersChanged'):
+                w.parametersChanged.connect(self._on_param_changed)
+            
             self.stack.addWidget(w)
             self.widgets[name] = w
             self.selector.addItem(name)
 
-        run_btn = QPushButton("Process Image")
-        run_btn.setStyleSheet("background: #0984e3; color: white; font-weight: bold; height: 35px; border-radius: 5px;")
-        run_btn.clicked.connect(self._run)
-        layout.addWidget(run_btn)
-        self.selector.currentTextChanged.connect(lambda n: self.stack.setCurrentWidget(self.widgets[n]))
+        self.run_btn = QPushButton("Process Image")
+        self.run_btn.setStyleSheet("background: #0984e3; color: white; font-weight: bold; height: 35px; border-radius: 5px;")
+        self.run_btn.clicked.connect(self._run)
+        layout.addWidget(self.run_btn)
+        
+        # Connect selector to stack and trigger run if live
+        self.selector.currentTextChanged.connect(self._on_op_changed)
+
+    def _on_op_changed(self, name):
+        self.stack.setCurrentWidget(self.widgets[name])
+        if self.live_preview.isChecked():
+            self._run()
+
+    def _on_param_changed(self):
+        if self.live_preview.isChecked():
+            self._run()
 
     def _run(self):
         name = self.selector.currentText()
